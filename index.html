@@ -2,8 +2,37 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyPlan - 智能待办事项管理</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MyPlans - 智能待办事项管理</title>
+    
+    <!-- 网页图标 -->
+    <link rel="icon" type="image/svg+xml" href="logo.svg">
+    <link rel="shortcut icon" href="logo.svg">
+    
+    <!-- 苹果设备适配 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="MyPlans">
+    <link rel="apple-touch-icon" href="logo.svg">
+    <link rel="apple-touch-icon" sizes="57x57" href="logo.svg">
+    <link rel="apple-touch-icon" sizes="60x60" href="logo.svg">
+    <link rel="apple-touch-icon" sizes="72x72" href="logo.svg">
+    <link rel="apple-touch-icon" sizes="76x76" href="logo.svg">
+    <link rel="apple-touch-icon" sizes="114x114" href="logo.svg">
+    <link rel="apple-touch-icon" sizes="120x120" href="logo.svg">
+    <link rel="apple-touch-icon" sizes="144x144" href="logo.svg">
+    <link rel="apple-touch-icon" sizes="152x152" href="logo.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="logo.svg">
+    
+    <!-- PWA支持 -->
+    <meta name="theme-color" content="#4CAF50">
+    <meta name="msapplication-TileColor" content="#4CAF50">
+    <meta name="msapplication-TileImage" content="logo.svg">
+    
+    <!-- 防止页面缩放和滚动 -->
+    <meta name="format-detection" content="telephone=no">
+    <meta name="format-detection" content="email=no">
+    
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -15,7 +44,7 @@
             <div class="header-content">
                 <h1 class="app-title">
                     <i class="fas fa-tasks"></i>
-                    MyPlan
+                    MyPlans
                 </h1>
                 <div class="header-stats">
                     <span class="stat-item">
@@ -34,8 +63,25 @@
         <main class="main-content">
             <!-- 任务输入区域 -->
             <section class="task-input-section">
+                <!-- 统一通知容器 -->
+                <div id="unified-notification" class="unified-notification">
+                    <div class="notification-content">
+                        <div class="notification-main">
+                            <i class="notification-icon"></i>
+                            <span class="notification-text"></span>
+                        </div>
+                        <button class="notification-close">&times;</button>
+                    </div>
+                </div>
+                
                 <div class="input-container">
-                    <div class="input-group">
+
+                    <!-- 移动端折叠按钮 -->
+                    <button class="mobile-toggle-btn" id="mobileToggleBtn">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <!-- 完整输入表单 -->
+                    <div class="input-group" id="inputGroup">
                         <input type="text" id="taskInput" placeholder="添加新任务..." class="task-input">
                         <select id="prioritySelect" class="priority-select">
                             <option value="important">重要</option>
@@ -127,6 +173,20 @@
                     <p>添加你的第一个任务开始规划吧！</p>
                 </div>
             </section>
+
+            <!-- 数据管理区域 -->            
+            <section class="data-management-section">
+                <div class="data-buttons">
+                    <button class="data-btn export-btn" id="exportBtn">
+                        <i class="fas fa-download"></i>
+                        一键导出
+                    </button>
+                    <button class="data-btn import-btn" id="importBtn">
+                        <i class="fas fa-upload"></i>
+                        离线导入
+                    </button>
+                </div>
+            </section>
         </main>
     </div>
 
@@ -151,6 +211,26 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="cancelEdit">取消</button>
                 <button class="btn btn-primary" id="saveEdit">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 数据导入模态框 -->
+    <div class="modal" id="importModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>离线导入任务数据</h3>
+                <button class="close-btn" id="closeImportModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="import-instruction">请将之前导出的任务数据粘贴到下方文本框中：</p>
+                <textarea id="importDataInput" class="import-textarea" placeholder="请粘贴导出的JSON数据..."></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelImport">取消</button>
+                <button class="btn btn-primary" id="confirmImport">导入</button>
             </div>
         </div>
     </div>
