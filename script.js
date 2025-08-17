@@ -9,6 +9,21 @@ class NotificationManager {
         this.topNotificationTimer = null;
         this.lastMotivationTime = 0;
         this.motivationCooldown = 30 * 1000; // 30秒冷却时间，大幅缩短
+        this.periodicMotivationTimer = null;
+        this.userActiveTime = Date.now();
+        this.motivationInterval = 5 * 60 * 1000; // 5分钟间隔
+        this.minActiveTime = 2 * 60 * 1000; // 最少活跃2分钟后开始显示
+        this.isPageVisible = true;
+        this.userBehaviorData = {
+            sessionStartTime: Date.now(),
+            tasksCompletedInSession: 0,
+            motivationsShown: 0,
+            lastTaskCompletionTime: 0,
+            averageTaskCompletionTime: 0,
+            userEngagementScore: 0.5 // 0-1 scale
+        };
+        this.setupVisibilityListener();
+        this.setupUserActivityListener();
     }
 
     /**
@@ -437,6 +452,205 @@ class NotificationManager {
     }
 
     /**
+     * 设置页面可见性监听器
+     */
+    setupVisibilityListener() {
+        document.addEventListener('visibilitychange', () => {
+            this.isPageVisible = !document.hidden;
+            if (this.isPageVisible) {
+                this.userActiveTime = Date.now();
+                this.startPeriodicMotivation();
+            } else {
+                this.stopPeriodicMotivation();
+            }
+        });
+    }
+
+    /**
+     * 设置用户活动监听器
+     */
+    setupUserActivityListener() {
+        const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+        const updateActiveTime = () => {
+            this.userActiveTime = Date.now();
+        };
+        
+        events.forEach(event => {
+            document.addEventListener(event, updateActiveTime, true);
+        });
+        
+        // 设置不活跃检测定时器
+        setInterval(() => {
+            const inactiveTime = Date.now() - this.userActiveTime;
+            if (inactiveTime > 300000) { // 5分钟不活跃
+                this.updateUserBehaviorData('user_inactive', { inactiveTime });
+            }
+        }, 60000); // 每分钟检查一次
+    }
+
+    /**
+     * 开始定期激励
+     */
+    startPeriodicMotivation() {
+        if (this.periodicMotivationTimer) {
+            clearInterval(this.periodicMotivationTimer);
+        }
+        
+        this.periodicMotivationTimer = setInterval(() => {
+            this.checkAndShowPeriodicMotivation();
+        }, this.motivationInterval);
+    }
+
+    /**
+     * 停止定期激励
+     */
+    stopPeriodicMotivation() {
+        if (this.periodicMotivationTimer) {
+            clearInterval(this.periodicMotivationTimer);
+            this.periodicMotivationTimer = null;
+        }
+    }
+
+    /**
+      * 检查并显示定期激励
+      */
+     checkAndShowPeriodicMotivation() {
+         // 检查页面是否可见
+         if (!this.isPageVisible) return;
+         
+         // 检查用户是否足够活跃
+         const timeSinceActive = Date.now() - this.userActiveTime;
+         if (timeSinceActive > this.minActiveTime) return;
+         
+         // 检查冷却时间
+         const timeSinceLastMotivation = Date.now() - this.lastMotivationTime;
+         if (timeSinceLastMotivation < this.motivationCooldown) return;
+         
+         // 获取当前任务状态
+         const tasks = (typeof app !== 'undefined' && app) ? app.tasks : [];
+         const uncompletedTasks = tasks.filter(task => !task.completed);
+         const completedToday = tasks.filter(task => {
+             const today = new Date().toDateString();
+             return task.completed && task.completedAt && new Date(task.completedAt).toDateString() === today;
+         });
+         
+         const timeOfDay = this.getTimeOfDay();
+         
+         // 智能计算显示概率
+         const probability = this.calculateSmartMotivationProbability(uncompletedTasks, completedToday, timeOfDay);
+         
+         if (Math.random() <= probability) {
+             const motivationMessages = this.getMotivationMessages(timeOfDay, uncompletedTasks.length, completedToday.length);
+             if (motivationMessages.length > 0) {
+                 const randomMessage = motivationMessages[Math.floor(Math.random() * motivationMessages.length)];
+                 this.show({
+                     message: randomMessage,
+                     type: 'motivation',
+                     duration: 5000,
+                     closable: true
+                 });
+                 this.lastMotivationTime = Date.now();
+                 this.userBehaviorData.motivationsShown++;
+             }
+         }
+     }
+     
+     /**
+      * 智能计算激励显示概率
+      */
+     calculateSmartMotivationProbability(uncompletedTasks, completedToday, timeOfDay) {
+         let baseProbability = 0.4;
+         
+         // 基于任务状态调整
+         if (uncompletedTasks.length === 0 && completedToday.length > 0) {
+             baseProbability = 0.8; // 任务完成时高概率显示夸奖
+         } else if (completedToday.length >= 3) {
+             baseProbability = 0.6; // 完成较多任务时增加激励
+         } else if (uncompletedTasks.length > 8) {
+             baseProbability = 0.3; // 任务很多时适当降低频率
+         }
+         
+         // 基于用户参与度调整
+         const engagementMultiplier = 0.5 + (this.userBehaviorData.userEngagementScore * 0.5);
+         baseProbability *= engagementMultiplier;
+         
+         // 基于会话时长调整
+         const sessionDuration = Date.now() - this.userBehaviorData.sessionStartTime;
+         const sessionHours = sessionDuration / (1000 * 60 * 60);
+         if (sessionHours > 2) {
+             baseProbability *= 1.2; // 长时间使用时增加激励
+         } else if (sessionHours < 0.5) {
+             baseProbability *= 0.8; // 短时间使用时减少激励
+         }
+         
+         // 基于最近任务完成情况调整
+         const timeSinceLastCompletion = Date.now() - this.userBehaviorData.lastTaskCompletionTime;
+         if (timeSinceLastCompletion > 30 * 60 * 1000) { // 30分钟没完成任务
+             baseProbability *= 1.3; // 增加激励频率
+         }
+         
+         // 基于激励显示频率调整（防止过度激励）
+         const motivationRate = this.userBehaviorData.motivationsShown / Math.max(sessionHours, 0.1);
+         if (motivationRate > 3) { // 每小时超过3次激励
+             baseProbability *= 0.7; // 降低频率
+         }
+         
+         // 基于时间段调整
+         const hour = new Date().getHours();
+         if ((hour >= 9 && hour <= 11) || (hour >= 14 && hour <= 16)) {
+             baseProbability *= 1.1; // 高效时段增加激励
+         } else if (hour >= 22 || hour <= 6) {
+             baseProbability *= 0.8; // 深夜/凌晨减少激励
+         }
+         
+         return Math.min(Math.max(baseProbability, 0.1), 0.9); // 限制在10%-90%之间
+     }
+     
+     /**
+      * 更新用户行为数据
+      */
+     updateUserBehaviorData(action, data = {}) {
+         const now = Date.now();
+         
+         switch (action) {
+             case 'taskCompleted':
+                 this.userBehaviorData.tasksCompletedInSession++;
+                 this.userBehaviorData.lastTaskCompletionTime = now;
+                 
+                 // 计算平均完成时间
+                 if (data.taskCreatedTime) {
+                     const completionTime = now - data.taskCreatedTime;
+                     if (this.userBehaviorData.averageTaskCompletionTime === 0) {
+                         this.userBehaviorData.averageTaskCompletionTime = completionTime;
+                     } else {
+                         this.userBehaviorData.averageTaskCompletionTime = 
+                             (this.userBehaviorData.averageTaskCompletionTime + completionTime) / 2;
+                     }
+                 }
+                 
+                 // 提升参与度分数
+                 this.userBehaviorData.userEngagementScore = Math.min(
+                     this.userBehaviorData.userEngagementScore + 0.1, 1.0
+                 );
+                 break;
+                 
+             case 'taskCreated':
+                 // 创建任务也是积极行为
+                 this.userBehaviorData.userEngagementScore = Math.min(
+                     this.userBehaviorData.userEngagementScore + 0.05, 1.0
+                 );
+                 break;
+                 
+             case 'userInactive':
+                 // 用户不活跃时降低参与度
+                 this.userBehaviorData.userEngagementScore = Math.max(
+                     this.userBehaviorData.userEngagementScore - 0.02, 0.1
+                 );
+                 break;
+         }
+     }
+
+    /**
      * 获取激励信息
      */
     getMotivationMessages(timeOfDay, uncompletedCount, completedCount) {
@@ -449,28 +663,48 @@ class NotificationManager {
                 '☀️ 新的一天开始了，从最简单的任务开始吧！',
                 '✨ 晨光正好，正是高效工作的时候',
                 '🌱 清晨的你充满活力，让我们开始吧！',
-                '🎯 早晨的专注力最棒，抓住这个黄金时间！'
+                '🎯 早晨的专注力最棒，抓住这个黄金时间！',
+                '🌈 新的一天，新的可能，你准备好了吗？',
+                '☕ 来杯咖啡，开启高效的一天！',
+                '🎪 早晨的魔法时光，让奇迹发生吧！',
+                '🌸 春天的早晨最美好，就像现在的你！',
+                '🎵 听，成功在向你招手！'
             ],
             'afternoon': [
                 '🌞 下午时光，适合处理一些重要任务',
                 '💪 午后精神好，不如完成一个小目标？',
                 '⏰ 时间过半，看看还有什么可以快速完成的',
                 '🚀 下午的你依然充满干劲！',
-                '🎨 午后阳光正好，创造力爆棚的时候到了！'
+                '🎨 午后阳光正好，创造力爆棚的时候到了！',
+                '🍃 午后微风轻拂，正是思考的好时光',
+                '🎭 下午场的表演开始了，你是主角！',
+                '🌻 向日葵般的你，总是朝着目标前进',
+                '🎪 下午的精彩正在上演，别错过！',
+                '🌊 乘风破浪的下午，勇敢前行！'
             ],
             'evening': [
                 '🌆 晚上时光，整理一下今天的收获吧',
                 '🌙 夜幕降临，完成最后几个任务？',
                 '⭐ 今晚还有时间，不如再努力一下',
                 '🕯️ 夜晚的宁静最适合专心工作',
-                '🌟 晚间时光，为今天画个完美句号！'
+                '🌟 晚间时光，为今天画个完美句号！',
+                '🎭 夜晚的舞台属于努力的你',
+                '🌙 月亮见证着你的每一份努力',
+                '🎨 夜色如画，你就是画中最亮的那颗星',
+                '🍷 为今天的努力干杯！',
+                '🎪 夜晚的马戏团，精彩还在继续！'
             ],
             'night': [
                 '🌙 夜深了，明天的任务今天能完成一点是一点',
                 '🦉 深夜时分，适合做一些安静的任务',
                 '💫 夜猫子模式，专注力MAX！',
                 '🌌 深夜的你就像夜空中最亮的星',
-                '🔥 夜深人静，正是高效工作的好时机！'
+                '🔥 夜深人静，正是高效工作的好时机！',
+                '🌠 流星划过，为你的努力点赞',
+                '🎭 深夜的独角戏，你演得很棒！',
+                '🌙 月光如水，照亮你前进的路',
+                '⭐ 星星都在为你加油呢！',
+                '🎪 深夜的魔法时刻，创造奇迹吧！'
             ]
         };
         
@@ -484,7 +718,13 @@ class NotificationManager {
                 '🏆 任务清单空空如也，享受这份成就感吧！',
                 '💎 哇！你把所有事情都搞定了，简直是超人！',
                 '🌈 干净的任务列表就像你整理好的生活一样美好！',
-                '👑 今天的你就是自己的国王/女王！'
+                '👑 今天的你就是自己的国王/女王！',
+                '🎪 完美收官！你就是今天的MVP！',
+                '🌟 全部完成！你的效率让人惊叹！',
+                '🎭 精彩的表演结束了，观众都在为你鼓掌！',
+                '🏅 冠军就是你！今天的胜利属于你！',
+                '🎨 你把今天画成了最美的画作！',
+                '🚀 任务火箭发射成功，目标达成！'
             );
         } else if (uncompletedCount <= 3) {
             messages.push(
@@ -492,7 +732,12 @@ class NotificationManager {
                 '🏃‍♀️ 胜利在望，坚持就是胜利！',
                 '💪 最后几步了，你可以的！',
                 '🌟 终点线就在眼前，加油冲刺！',
-                '🚀 最后的关卡，你一定能突破！'
+                '🚀 最后的关卡，你一定能突破！',
+                '🎪 压轴大戏即将上演，你准备好了吗？',
+                '🏆 胜利的号角已经响起！',
+                '⚡ 最后的闪电战，一鼓作气！',
+                '🎭 大结局就在眼前，精彩继续！',
+                '🌈 彩虹的尽头就是宝藏，加油！'
             );
         } else if (completedCount > 0) {
             messages.push(
@@ -500,7 +745,14 @@ class NotificationManager {
                 '📈 进展不错，再接再厉！',
                 '⭐ 每完成一个任务都是进步，加油！',
                 '🎊 看看你的成就，每一个都闪闪发光！',
-                '💫 你的执行力让星星都为你点赞！'
+                '💫 你的执行力让星星都为你点赞！',
+                '🎪 精彩的表演正在进行中！',
+                '🌟 你就像夜空中最亮的星！',
+                '🚀 火箭已经点火，继续飞向目标！',
+                '🎨 你正在创作人生的杰作！',
+                '🏆 每一步都在向冠军靠近！',
+                `🎭 ${completedCount}个精彩片段已完成，故事还在继续！`,
+                '💎 每个完成的任务都是珍贵的宝石！'
             );
         } else {
             messages.push(
@@ -511,8 +763,60 @@ class NotificationManager {
                 '💎 专注当下，先完成一个小任务',
                 '🌟 你比想象中更强大，相信自己！',
                 '🎨 创造属于你的精彩，一步一个脚印！',
-                '🍀 幸运总是眷顾努力的人，比如你！'
+                '🍀 幸运总是眷顾努力的人，比如你！',
+                '🎪 人生的马戏团开始了，你是主角！',
+                '🌈 每一个开始都孕育着无限可能！',
+                '⚡ 闪电般的行动力，就从现在开始！',
+                '🎭 人生如戏，现在是你的主场时间！',
+                '🚀 倒计时开始，准备发射你的潜能！',
+                '🌟 星星之火可以燎原，从小事做起！',
+                '🎨 空白的画布等待你来创作奇迹！'
             );
+        }
+        
+        // 添加基于完成率的个性化消息
+        const completionRate = completedCount / (completedCount + uncompletedCount) || 0;
+        if (completionRate > 0.8) {
+            messages.push(
+                '🔥 完成率超过80%！你就是效率之王！',
+                '⚡ 这个完成率简直逆天了！',
+                '🏆 如此高的完成率，你值得所有掌声！'
+            );
+        } else if (completionRate > 0.5) {
+            messages.push(
+                '📊 完成率过半，势头很好！',
+                '🎯 你正在稳步向目标前进！',
+                '💪 这个节奏很棒，继续保持！'
+            );
+        }
+        
+        // 添加基于时间的特殊激励
+        const hour = new Date().getHours();
+        if (hour >= 9 && hour <= 11) {
+            messages.push('☕ 上午黄金时间，大脑最清醒的时候！');
+        } else if (hour >= 14 && hour <= 16) {
+            messages.push('🌞 下午效率时段，抓住这个机会！');
+        } else if (hour >= 20 && hour <= 22) {
+            messages.push('🌙 夜晚思维活跃期，灵感迸发的时刻！');
+        }
+        
+        // 添加随机的鼓励金句
+        const inspirationalQuotes = [
+            '💫 "成功不是终点，失败不是末日，继续前进的勇气才最可贵"',
+            '🌟 "每一个不曾起舞的日子，都是对生命的辜负"',
+            '🚀 "你的潜力就像宇宙一样无限"',
+            '🎨 "生活是一张白纸，你可以在上面画出任何想要的图案"',
+            '⚡ "行动是治愈恐惧的良药"',
+            '🌈 "风雨过后必有彩虹，坚持就是胜利"',
+            '🎯 "专注于过程，结果自然会来"',
+            '💎 "压力是煤炭变成钻石的必经之路"',
+            '🌱 "每一次努力都是在为未来的自己投资"',
+            '🎪 "人生就是一场精彩的表演，你是唯一的主角"'
+        ];
+        
+        // 10%的概率添加励志金句
+        if (Math.random() < 0.1) {
+            messages.push(...inspirationalQuotes);
         }
         
         return messages;
@@ -559,6 +863,9 @@ class MyPlanApp {
         setInterval(() => {
             this.notificationManager.showSmartNotification(this.tasks);
         }, 30 * 60 * 1000);
+        
+        // 启动定期激励系统
+        this.notificationManager.startPeriodicMotivation();
     }
 
     /**
@@ -753,6 +1060,9 @@ class MyPlanApp {
         this.tasks.push(task);
         this.saveTasks();
         
+        // 更新用户行为数据
+        this.notificationManager.updateUserBehaviorData('task_created');
+        
         // 清空输入框
         taskInput.value = '';
         taskInput.focus();
@@ -778,6 +1088,8 @@ class MyPlanApp {
             // 根据完成状态写入完成时间戳，支持下沉排序
             if (task.completed) {
                 task.completedAt = new Date().toISOString();
+                // 更新用户行为数据 - 任务完成
+                this.notificationManager.updateUserBehaviorData('task_completed');
             } else {
                 task.completedAt = null;
             }
