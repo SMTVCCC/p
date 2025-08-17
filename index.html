@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyPlan - 智能待办事项管理</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 头部区域 -->
+        <header class="app-header">
+            <div class="header-content">
+                <h1 class="app-title">
+                    <i class="fas fa-tasks"></i>
+                    MyPlan
+                </h1>
+                <div class="header-stats">
+                    <span class="stat-item">
+                        <span class="stat-number" id="totalTasks">0</span>
+                        <span class="stat-label">总任务</span>
+                    </span>
+                    <span class="stat-item">
+                        <span class="stat-number" id="completedTasks">0</span>
+                        <span class="stat-label">已完成</span>
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主要内容区域 -->
+        <main class="main-content">
+            <!-- 任务输入区域 -->
+            <section class="task-input-section">
+                <div class="input-container">
+                    <div class="input-group">
+                        <input type="text" id="taskInput" placeholder="添加新任务..." class="task-input">
+                        <select id="prioritySelect" class="priority-select">
+                            <option value="important">重要</option>
+                            <option value="daily" selected>每日</option>
+                            <option value="secondary">次要</option>
+                            <option value="general">一般</option>
+                        </select>
+                        <button id="addTaskBtn" class="add-btn">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 优先级过滤器 -->
+            <section class="filter-section">
+                <div class="filter-tabs">
+                    <button class="filter-tab active" data-priority="all">
+                        <i class="fas fa-list"></i>
+                        全部
+                    </button>
+                    <button class="filter-tab" data-priority="important">
+                        <i class="fas fa-exclamation-circle"></i>
+                        重要
+                    </button>
+                    <button class="filter-tab" data-priority="daily">
+                        <i class="fas fa-calendar-day"></i>
+                        每日
+                    </button>
+                    <button class="filter-tab" data-priority="secondary">
+                        <i class="fas fa-clock"></i>
+                        次要
+                    </button>
+                    <button class="filter-tab" data-priority="general">
+                        <i class="fas fa-circle"></i>
+                        一般
+                    </button>
+                </div>
+            </section>
+
+            <!-- 任务列表区域 -->
+            <section class="tasks-section">
+                <div class="tasks-container">
+                    <!-- 重要任务 -->
+                    <div class="priority-group" data-priority="important">
+                        <h3 class="priority-title">
+                            <i class="fas fa-exclamation-circle"></i>
+                            重要任务
+                            <span class="task-count" id="importantCount">0</span>
+                        </h3>
+                        <div class="task-list" id="importantTasks"></div>
+                    </div>
+
+                    <!-- 每日任务 -->
+                    <div class="priority-group" data-priority="daily">
+                        <h3 class="priority-title">
+                            <i class="fas fa-calendar-day"></i>
+                            每日任务
+                            <span class="task-count" id="dailyCount">0</span>
+                        </h3>
+                        <div class="task-list" id="dailyTasks"></div>
+                    </div>
+
+                    <!-- 次要任务 -->
+                    <div class="priority-group" data-priority="secondary">
+                        <h3 class="priority-title">
+                            <i class="fas fa-clock"></i>
+                            次要任务
+                            <span class="task-count" id="secondaryCount">0</span>
+                        </h3>
+                        <div class="task-list" id="secondaryTasks"></div>
+                    </div>
+
+                    <!-- 一般任务 -->
+                    <div class="priority-group" data-priority="general">
+                        <h3 class="priority-title">
+                            <i class="fas fa-circle"></i>
+                            一般任务
+                            <span class="task-count" id="generalCount">0</span>
+                        </h3>
+                        <div class="task-list" id="generalTasks"></div>
+                    </div>
+                </div>
+
+                <!-- 空状态 -->
+                <div class="empty-state" id="emptyState">
+                    <i class="fas fa-clipboard-list"></i>
+                    <h3>还没有任务</h3>
+                    <p>添加你的第一个任务开始规划吧！</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 任务编辑模态框 -->
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>编辑任务</h3>
+                <button class="close-btn" id="closeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="editTaskInput" class="edit-input" placeholder="任务内容">
+                <select id="editPrioritySelect" class="edit-select">
+                    <option value="important">重要</option>
+                    <option value="daily">每日</option>
+                    <option value="secondary">次要</option>
+                    <option value="general">一般</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelEdit">取消</button>
+                <button class="btn btn-primary" id="saveEdit">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="storage.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
